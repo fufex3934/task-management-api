@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Task, TaskDocument } from './schemas/task.schema';
 import { Model } from 'mongoose';
 import { CreateTaskDto } from './dto/create-task.dto';
+import { TaskNotFoundException } from './exceptions/task-not-found.exception';
 
 @Injectable()
 export class TasksService {
@@ -23,7 +24,7 @@ export class TasksService {
   async findOne(id: string): Promise<Task> {
     const task = await this.taskModel.findById(id).exec();
     if (!task) {
-      throw new NotFoundException(`Task with id ${id} not found`);
+      throw new TaskNotFoundException(id);
     }
     return task;
   }
@@ -34,7 +35,7 @@ export class TasksService {
       .findByIdAndUpdate(id, updateData, { new: true })
       .exec();
     if (!updatedTask) {
-      throw new NotFoundException(`Task with id ${id} not found`);
+      throw new TaskNotFoundException(id);
     }
     return updatedTask;
   }
@@ -43,7 +44,7 @@ export class TasksService {
   async delete(id: string): Promise<Task> {
     const deletedTask = await this.taskModel.findByIdAndDelete(id).exec();
     if (!deletedTask) {
-      throw new NotFoundException(`Task with id ${id} not found`);
+      throw new TaskNotFoundException(id);
     }
     return deletedTask;
   }
