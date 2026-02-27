@@ -1,51 +1,92 @@
-import { Injectable } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Task, TaskDocument } from './schemas/task.schema';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import { CreateTaskDto } from './dto/create-task.dto';
-import { TaskNotFoundException } from './exceptions/task-not-found.exception';
+import { UpdateTaskDto } from './dto/update-task.dto';
 
 @Injectable()
 export class TasksService {
   constructor(@InjectModel(Task.name) private taskModel: Model<TaskDocument>) {}
 
   //create  a new task
-  async create(createTaskDto: CreateTaskDto): Promise<Task> {
-    const newTask = new this.taskModel(createTaskDto);
+  async create(createTaskDto: CreateTaskDto, userId: string): Promise<Task> {
+    const taskWithUser = {
+      ...createTaskDto,
+      userId: new Types.ObjectId(userId), // Associate task with user
+    };
+    const newTask = new this.taskModel(taskWithUser);
     return newTask.save();
   }
 
   //find all tasks
-  async findAll(): Promise<Task[]> {
-    return this.taskModel.find().exec();
+  async findAll(userId: string, userRole: string): Promise<Task[]> {
+    // Admin sees all tasks, users see only their own
+    const filter =
+      userRole === 'admin' ? {} : { userId: new Types.ObjectId(userId) };
+    return this.taskModel.find(filter).populate('userId', 'email name').exec();
   }
 
   //find one tak by id
-  async findOne(id: string): Promise<Task> {
-    const task = await this.taskModel.findById(id).exec();
+  async findOne(id: string, userId: string, userRole: string): Promise<Task> {
+    const task = await this.taskModel
+      .findById(id)
+      .populate('userId', 'email name')
+      .exec();
+
     if (!task) {
-      throw new TaskNotFoundException(id);
+      throw new NotFoundException(`Task with ID ${id} not found`);
     }
+
+    // Check ownership: admin can access any task, users only their own
+    if (userRole !== 'admin' && task.userId.toString() !== userId) {
+      throw new ForbiddenException('You can only access your own tasks');
+    }
+
     return task;
   }
 
   //update a task
-  async update(id: string, updateData: Partial<Task>): Promise<Task> {
-    const updatedTask = await this.taskModel
-      .findByIdAndUpdate(id, updateData, { new: true })
-      .exec();
-    if (!updatedTask) {
-      throw new TaskNotFoundException(id);
+
+  async update(
+    id: string,
+    updateTaskDto: UpdateTaskDto,
+    userId: string,
+    userRole: string,
+  ): Promise<TaskDocument | null> {
+    const task = await this.taskModel.findById(id).exec();
+
+    if (!task) {
+      throw new NotFoundException(`Task with ID ${id} not found`);
     }
-    return updatedTask;
+
+    // Check ownership
+    if (userRole !== 'admin' && task.userId.toString() !== userId) {
+      throw new ForbiddenException('You can only update your own tasks');
+    }
+
+    return this.taskModel
+      .findByIdAndUpdate(id, updateTaskDto, { new: true })
+      .exec();
   }
 
   //delete a task
-  async delete(id: string): Promise<Task> {
-    const deletedTask = await this.taskModel.findByIdAndDelete(id).exec();
-    if (!deletedTask) {
-      throw new TaskNotFoundException(id);
+  async delete(id: string, userId: string, userRole: string): Promise<void> {
+    const task = await this.taskModel.findById(id).exec();
+
+    if (!task) {
+      throw new NotFoundException(`Task with ID ${id} not found`);
     }
-    return deletedTask;
+
+    // Check ownership: only admin can delete any task, users delete only their own
+    if (userRole !== 'admin' && task.userId.toString() !== userId) {
+      throw new ForbiddenException('You can only delete your own tasks');
+    }
+
+    await this.taskModel.findByIdAndDelete(id).exec();
   }
 }
