@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import appConfig from './config/app.config';
+import { LoggerModule } from './logger/logger.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import appConfig from './config/app.config';
     TasksModule,
     AuthModule,
     UsersModule,
+    LoggerModule,
   ],
   controllers: [AppController],
   providers: [AppService],
