@@ -8,6 +8,7 @@ import { Task, TaskDocument } from './schemas/task.schema';
 import { Model, Types } from 'mongoose';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
+import { PaginatedResponse, PaginationDto } from './dto/pagination.dto';
 
 @Injectable()
 export class TasksService {
@@ -76,5 +77,45 @@ export class TasksService {
     }
 
     await this.taskModel.findByIdAndDelete(id).exec();
+  }
+
+  async findAllPaginated(
+    userId: string,
+    userRole: string,
+    pagination: PaginationDto,
+  ): Promise<PaginatedResponse<Task>> {
+    const { page, limit } = pagination;
+    const skip = (page - 1) * limit; // Calculate how many to skip
+
+    // Build filter based on role
+    const filter =
+      userRole === 'admin' ? {} : { userId: new Types.ObjectId(userId) };
+
+    // Get total count for pagination metadata
+    const total = await this.taskModel.countDocuments(filter).exec();
+
+    // Get paginated data
+    const data = await this.taskModel
+      .find(filter)
+      .populate('userId', 'email name')
+      .skip(skip)
+      .limit(limit)
+      .sort({ createdAt: -1 }) // Newest first
+      .exec();
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      data,
+      meta: {
+        total,
+        page,
+        limit,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrevious: page > 1,
+      },
+    };
   }
 }

@@ -8,6 +8,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { TasksService } from './tasks.service';
@@ -19,6 +20,7 @@ import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
 import { OwnerGuard } from './guards/owner.guard';
+import { PaginatedResponse, PaginationDto } from './dto/pagination.dto';
 
 type CurrentUserPayload = { sub: string; email: string; role?: string };
 
@@ -39,9 +41,16 @@ export class TasksController {
   }
 
   @Get()
-  async getAllTasks(@CurrentUser() user: CurrentUserPayload): Promise<Task[]> {
+  async getAllTasks(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query() pagination: PaginationDto,
+  ): Promise<PaginatedResponse<Task>> {
     console.log('User', user.email, 'fetching all tasks');
-    return await this.tasksService.findAll(user.sub, user.role || 'user');
+    return this.tasksService.findAllPaginated(
+      user.sub,
+      user.role || 'user',
+      pagination,
+    );
   }
 
   @Get(':id')
@@ -81,5 +90,17 @@ export class TasksController {
     return {
       message: `Welcome Admin ${user.email}`,
     };
+  }
+
+  @Get('paginated')
+  async findAllPaginated(
+    @CurrentUser() user: CurrentUserPayload,
+    @Query() pagination: PaginationDto, // NestJS automatically validates!
+  ): Promise<PaginatedResponse<Task>> {
+    return this.tasksService.findAllPaginated(
+      user.sub,
+      user.role || 'user',
+      pagination,
+    );
   }
 }
