@@ -73,13 +73,10 @@ export class TasksController {
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(RolesGuard) // Then, check roles for this specific route
   @Roles('admin') // Only admins can delete tasks
-  async deleteTask(
-    @Param('id') id: string,
-    @CurrentUser() user: CurrentUserPayload,
-  ): Promise<void> {
+  async deleteTask(@Param('id') id: string): Promise<void> {
     // Even though only admins can call this, we still check ownership
     // to prevent admin from deleting non-existent tasks
-    return this.tasksService.delete(id, user.sub, user.role || 'user');
+    return this.tasksService.delete(id);
   }
 
   // Special admin-only endpoint

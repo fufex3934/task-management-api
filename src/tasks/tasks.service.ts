@@ -1,18 +1,23 @@
-import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Task, TaskDocument } from './schemas/task.schema';
 import { Model, Types } from 'mongoose';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { PaginatedResponse, PaginationDto } from './dto/pagination.dto';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import {
+  TaskCompletedEvent,
+  TaskCreatedEvent,
+  TaskDeletedEvent,
+} from 'src/events/task.events';
 
 @Injectable()
 export class TasksService {
-  constructor(@InjectModel(Task.name) private taskModel: Model<TaskDocument>) {}
+  constructor(
+    @InjectModel(Task.name) private taskModel: Model<TaskDocument>,
+    private eventEmitter: EventEmitter2,
+  ) {}
 
   //create  a new task
   async create(createTaskDto: CreateTaskDto, userId: string): Promise<Task> {
@@ -21,7 +26,18 @@ export class TasksService {
       userId: new Types.ObjectId(userId), // Associate task with user
     };
     const newTask = new this.taskModel(taskWithUser);
-    return newTask.save();
+    const savedTask = await newTask.save();
+
+    // Emit event that task was created
+    const event = new TaskCreatedEvent(
+      savedTask._id.toString(),
+      userId,
+      savedTask.title,
+      savedTask.description,
+    );
+
+    this.eventEmitter.emit('task.created', event);
+    return savedTask;
   }
 
   //find all tasks
@@ -52,31 +68,34 @@ export class TasksService {
     id: string,
     updateTaskDto: UpdateTaskDto,
   ): Promise<TaskDocument | null> {
-    const task = await this.taskModel.findById(id).exec();
-
-    if (!task) {
-      throw new NotFoundException(`Task with ID ${id} not found`);
-    }
-
-    return this.taskModel
+    const task = await this.taskModel
       .findByIdAndUpdate(id, updateTaskDto, { new: true })
       .exec();
+
+    // Check if task was completed
+    if (task && updateTaskDto.status === 'completed') {
+      const event = new TaskCompletedEvent(
+        task._id.toString(),
+        task.userId.toString(),
+        new Date(),
+      );
+      this.eventEmitter.emit('task.completed', event);
+    }
+    return task;
   }
 
   //delete a task
-  async delete(id: string, userId: string, userRole: string): Promise<void> {
-    const task = await this.taskModel.findById(id).exec();
+  async delete(id: string): Promise<void> {
+    const task = await this.taskModel.findByIdAndDelete(id).exec();
 
-    if (!task) {
-      throw new NotFoundException(`Task with ID ${id} not found`);
+    if (task) {
+      const event = new TaskDeletedEvent(
+        task._id.toString(),
+        task.userId.toString(),
+        'User deleted task',
+      );
+      this.eventEmitter.emit('task.deleted', event);
     }
-
-    // Check ownership: only admin can delete any task, users delete only their own
-    if (userRole !== 'admin' && task.userId.toString() !== userId) {
-      throw new ForbiddenException('You can only delete your own tasks');
-    }
-
-    await this.taskModel.findByIdAndDelete(id).exec();
   }
 
   async findAllPaginated(
