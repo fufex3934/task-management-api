@@ -18,6 +18,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { CurrentUser } from 'src/auth/decorators/current-user.decorator';
 import { RolesGuard } from 'src/auth/guards/roles.guard';
 import { Roles } from 'src/auth/decorators/roles.decorator';
+import { OwnerGuard } from './guards/owner.guard';
 
 type CurrentUserPayload = { sub: string; email: string; role?: string };
 
@@ -44,26 +45,19 @@ export class TasksController {
   }
 
   @Get(':id')
-  async getTaskById(
-    @Param('id') id: string,
-    @CurrentUser() user: CurrentUserPayload,
-  ): Promise<Task> {
-    return await this.tasksService.findOne(id, user.sub, user.role || 'user');
+  @UseGuards(OwnerGuard)
+  async getTaskById(@Param('id') id: string): Promise<Task> {
+    return await this.tasksService.findOne(id);
   }
 
   @Patch(':id')
+  @UseGuards(OwnerGuard)
   async updateTask(
     @Param('id') id: string,
     @Body()
     updateData: UpdateTaskDto,
-    @CurrentUser() user: CurrentUserPayload,
   ): Promise<TaskDocument | null> {
-    return this.tasksService.update(
-      id,
-      updateData,
-      user.sub,
-      user.role || 'user',
-    );
+    return this.tasksService.update(id, updateData);
   }
 
   @Delete(':id')

@@ -31,8 +31,8 @@ export class TasksService {
     return this.taskModel.find(filter).populate('userId', 'email name').exec();
   }
 
-  //find one tak by id
-  async findOne(id: string, userId: string, userRole: string): Promise<Task> {
+  //find one task by id
+  async findOne(id: string): Promise<Task> {
     const task = await this.taskModel
       .findById(id)
       .populate('userId', 'email name')
@@ -40,11 +40,6 @@ export class TasksService {
 
     if (!task) {
       throw new NotFoundException(`Task with ID ${id} not found`);
-    }
-
-    // Check ownership: admin can access any task, users only their own
-    if (userRole !== 'admin' && task.userId.toString() !== userId) {
-      throw new ForbiddenException('You can only access your own tasks');
     }
 
     return task;
@@ -55,18 +50,11 @@ export class TasksService {
   async update(
     id: string,
     updateTaskDto: UpdateTaskDto,
-    userId: string,
-    userRole: string,
   ): Promise<TaskDocument | null> {
     const task = await this.taskModel.findById(id).exec();
 
     if (!task) {
       throw new NotFoundException(`Task with ID ${id} not found`);
-    }
-
-    // Check ownership
-    if (userRole !== 'admin' && task.userId.toString() !== userId) {
-      throw new ForbiddenException('You can only update your own tasks');
     }
 
     return this.taskModel
