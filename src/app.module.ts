@@ -8,6 +8,7 @@ import { UsersModule } from './users/users.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import appConfig from './config/app.config';
 import { LoggerModule } from './logger/logger.module';
+import { ThrottlerModule } from '@nestjs/throttler';
 
 @Module({
   imports: [
@@ -17,6 +18,21 @@ import { LoggerModule } from './logger/logger.module';
       isGlobal: true, // Makes ConfigService available everywhere
       load: [appConfig],
     }),
+    // Rate limiting
+    // Rate limiting
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => [
+        {
+          // Adding a fallback value (e.g., 60000ms and 10 requests)
+          // ensures the type is always 'number', not 'number | undefined'
+          ttl: configService.get<number>('app.throttle.ttl') ?? 60000,
+          limit: configService.get<number>('app.throttle.limit') ?? 10,
+        },
+      ],
+    }),
+
     //use configService to get mongo uri
     MongooseModule.forRootAsync({
       imports: [ConfigModule],
