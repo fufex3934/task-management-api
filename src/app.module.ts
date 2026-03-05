@@ -10,6 +10,7 @@ import appConfig from './config/app.config';
 import { LoggerModule } from './logger/logger.module';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { WebSocketModule } from './websocket/websocket.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
     AuthModule,
     UsersModule,
     LoggerModule,
+    WebSocketModule,
   ],
   controllers: [AppController],
   providers: [AppService],

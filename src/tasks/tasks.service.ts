@@ -11,12 +11,14 @@ import {
   TaskCreatedEvent,
   TaskDeletedEvent,
 } from 'src/events/task.events';
+import { TasksGateway } from './tasks.gateway';
 
 @Injectable()
 export class TasksService {
   constructor(
     @InjectModel(Task.name) private taskModel: Model<TaskDocument>,
     private eventEmitter: EventEmitter2,
+    private tasksGateway: TasksGateway,
   ) {}
 
   //create  a new task
@@ -37,6 +39,14 @@ export class TasksService {
     );
 
     this.eventEmitter.emit('task.created', event);
+
+    // NEW: WebSocket notification
+    const populatedTask = await this.taskModel
+      .findById(savedTask._id)
+      .populate('userId', 'email name')
+      .exec();
+
+    this.tasksGateway.notifyTaskCreated(populatedTask);
     return savedTask;
   }
 
@@ -80,6 +90,15 @@ export class TasksService {
         new Date(),
       );
       this.eventEmitter.emit('task.completed', event);
+    }
+
+    // NEW: WebSocket notification for task update
+    if (task) {
+      this.tasksGateway.notifyTaskUpdated(id, {
+        title: task.title,
+        status: task.status,
+        updatedBy: task.userId,
+      });
     }
     return task;
   }

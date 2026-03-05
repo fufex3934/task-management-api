@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WebSocket Test</title>
+    <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .container { display: flex; gap: 20px; }
+        .panel { flex: 1; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .message { padding: 8px; margin: 5px 0; background: #e3f2fd; border-radius: 4px; }
+        .comment { background: #f1f8e9; }
+        .typing { color: #666; font-style: italic; }
+        input, button { padding: 8px; margin: 5px; }
+        .status { padding: 5px; margin: 10px 0; border-radius: 4px; }
+        .connected { background: #c8e6c9; }
+        .disconnected { background: #ffcdd2; }
+    </style>
+</head>
+<body>
+    <h1>📡 Task Management WebSocket Test</h1>
+    
+    <div class="container">
+        <!-- Connection Panel -->
+        <div class="panel">
+            <h3>Connection</h3>
+            <div id="connectionStatus" class="status disconnected">🔴 Disconnected</div>
+            <input type="text" id="token" placeholder="JWT Token" style="width: 300px">
+            <button onclick="connect()">Connect</button>
+            <button onclick="disconnect()">Disconnect</button>
+        </div>
+
+        <!-- Task Room Panel -->
+        <div class="panel">
+            <h3>Task Room</h3>
+            <input type="text" id="taskId" placeholder="Task ID" value="task123">
+            <button onclick="joinTask()">Join Room</button>
+            <button onclick="leaveTask()">Leave Room</button>
+            
+            <h4>Comments</h4>
+            <input type="text" id="comment" placeholder="Write a comment...">
+            <button onclick="sendComment()">Send</button>
+            
+            <div id="typingIndicator" class="typing"></div>
+            <div id="comments"></div>
+        </div>
+
+        <!-- Events Panel -->
+        <div class="panel">
+            <h3>Live Events</h3>
+            <div id="events"></div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        const eventsDiv = document.getElementById('events');
+        const commentsDiv = document.getElementById('comments');
+        const typingIndicator = document.getElementById('typingIndicator');
+        let typingTimeout;
+
+        function addEvent(message, type = 'info') {
+            const eventEl = document.createElement('div');
+            eventEl.className = `message ${type}`;
+            eventEl.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            eventsDiv.prepend(eventEl);
+        }
+
+        function addComment(comment) {
+            const commentEl = document.createElement('div');
+            commentEl.className = 'message comment';
+            commentEl.innerHTML = `<strong>${comment.userEmail}:</strong> ${comment.content}<br>
+                                  <small>${new Date(comment.timestamp).toLocaleTimeString()}</small>`;
+            commentsDiv.prepend(commentEl);
+        }
+
+        function connect() {
+            const token = document.getElementById('token').value;
+            
+            socket = io('http://localhost:3000/tasks', {
+                auth: { token },
+                transports: ['websocket']
+            });
+
+            socket.on('connect', () => {
+                document.getElementById('connectionStatus').className = 'status connected';
+                document.getElementById('connectionStatus').textContent = '🟢 Connected';
+                addEvent('Connected to server', 'success');
+            });
+
+            socket.on('disconnect', () => {
+                document.getElementById('connectionStatus').className = 'status disconnected';
+                document.getElementById('connectionStatus').textContent = '🔴 Disconnected';
+                addEvent('Disconnected from server', 'error');
+            });
+
+            socket.on('connected', (data) => {
+                addEvent(`Welcome! User: ${data.userId}`, 'success');
+            });
+
+            socket.on('taskCreated', (task) => {
+                addEvent(`📝 New task created: ${task.title}`, 'info');
+            });
+
+            socket.on('taskUpdated', (data) => {
+                addEvent(`🔄 Task ${data.taskId} updated`, 'info');
+            });
+
+            socket.on('newComment', (comment) => {
+                addEvent(`💬 New comment from ${comment.userEmail}`, 'info');
+                addComment(comment);
+            });
+
+            socket.on('userJoined', (data) => {
+                addEvent(`👤 ${data.email} joined task ${data.taskId}`, 'info');
+            });
+
+            socket.on('userLeft', (data) => {
+                addEvent(`👋 ${data.email} left task ${data.taskId}`, 'info');
+            });
+
+            socket.on('userTyping', (data) => {
+                if (data.isTyping) {
+                    typingIndicator.textContent = `${data.email} is typing...`;
+                } else {
+                    typingIndicator.textContent = '';
+                }
+            });
+
+            socket.on('exception', (error) => {
+                addEvent(`❌ Error: ${error.message}`, 'error');
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+            }
+        }
+
+        function joinTask() {
+            const taskId = document.getElementById('taskId').value;
+            socket.emit('joinTask', { taskId }, (response) => {
+                addEvent(`Joined task ${taskId}`, 'success');
+                console.log('Join response:', response);
+            });
+        }
+
+        function leaveTask() {
+            const taskId = document.getElementById('taskId').value;
+            socket.emit('leaveTask', { taskId });
+            addEvent(`Left task ${taskId}`, 'info');
+        }
+
+        function sendComment() {
+            const taskId = document.getElementById('taskId').value;
+            const comment = document.getElementById('comment').value;
+            
+            socket.emit('sendComment', { taskId, comment }, (response) => {
+                document.getElementById('comment').value = '';
+                addEvent('Comment sent', 'success');
+            });
+        }
+
+        // Typing indicator
+        let typingTimer;
+        document.getElementById('comment').addEventListener('input', () => {
+            const taskId = document.getElementById('taskId').value;
+            
+            if (!socket) return;
+
+            // Send typing started
+            socket.emit('typing', { taskId, isTyping: true });
+
+            // Clear previous timer
+            clearTimeout(typingTimer);
+            
+            // Set timer to stop typing
+            typingTimer = setTimeout(() => {
+                socket.emit('typing', { taskId, isTyping: false });
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

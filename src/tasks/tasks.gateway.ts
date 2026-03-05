@@ -12,7 +12,7 @@ import { Server, Socket } from 'socket.io';
 import { UseGuards } from '@nestjs/common';
 import { LoggerService } from 'src/logger/logger.service';
 import { TaskEvent } from 'src/events/task.events';
-
+import { WsJwtGuard } from 'src/auth/guards/ws-jwt.guard';
 @WebSocketGateway({
   cors: {
     origin: '*', // In production , restrict this to frontend url
@@ -35,7 +35,7 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
   /**
    * When a client connects to WebSocket
    */
-  async handleconnection(client: Socket) {
+  async handleConnection(client: Socket) {
     try {
       // Extract user from handshake auth (we'll implement this)
       const user = await this.authenticatedSocket(client);
@@ -247,7 +247,7 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   // ========== Private Helper Methods ==========
 
-  private async authenticateSocket(client: Socket): Promise<any> {
+  private async authenticatedSocket(client: Socket): Promise<any> {
     // Get token from handshake
     const token =
       client.handshake.auth.token || client.handshake.headers.authorization;
@@ -273,7 +273,7 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!this.userSockets.has(userId)) {
       this.userSockets.set(userId, new Set());
     }
-    this.userSockets.get(userId).add(socketId);
+    this.userSockets.get(userId)!.add(socketId);
   }
 
   private removeUserConnection(userId: string, socketId: string) {
@@ -290,7 +290,7 @@ export class TasksGateway implements OnGatewayConnection, OnGatewayDisconnect {
     if (!this.userRooms.has(roomId)) {
       this.userRooms.set(roomId, new Set());
     }
-    this.userRooms.get(roomId).add(userId);
+    this.userRooms.get(roomId)!.add(userId);
   }
 
   private removeUserFromRoom(roomId: string, userId: string) {
